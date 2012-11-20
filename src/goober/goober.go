@@ -25,13 +25,14 @@ func newRouteTreeNode() (node *routeTreeNode) {
 }
 
 func New() (* Goober) {
-  var g = new(Goober)
   var head = make(map[string]*routeTreeNode)
-  g.head = head
-  g.head["GET"] = newRouteTreeNode()
-  g.head["POST"] = newRouteTreeNode()
-  g.head["PUT"] = newRouteTreeNode()
-  g.head["DELETE"] = newRouteTreeNode()
+  head = head
+  head["GET"] = newRouteTreeNode()
+  head["POST"] = newRouteTreeNode()
+  head["PUT"] = newRouteTreeNode()
+  head["DELETE"] = newRouteTreeNode()
+
+  g := &Goober{head: head}
 
   return g
 }
@@ -84,6 +85,14 @@ func (g *Goober) Get(route string, handler http.Handler) {
 
 func (g *Goober) Post(route string, handler http.Handler) {
   g.AddHandler("POST", route, handler)
+}
+
+func (g *Goober) Put(route string, handler http.Handler) {
+  g.AddHandler("PUT", route, handler)
+}
+
+func (g *Goober) Delete(route string, handler http.Handler) {
+  g.AddHandler("DELETE", route, handler)
 }
 
 func walkTree(node map[string]*routeTreeNode, parts *[]string) (handler http.Handler, err int) {
