@@ -2,7 +2,6 @@ package goober
 
 import  (
   "net/http"
-  "container/list"
   "strings"
   "fmt"
 )
@@ -12,14 +11,13 @@ type Goober struct {
 }
 
 type routeTreeNode struct {
-  handlers *list.List
+  handler http.Handler
   children map[string]*routeTreeNode
   dynamicChildren map[string]*routeTreeNode
 }
 
 func newRouteTreeNode() (node *routeTreeNode) {
   node = new(routeTreeNode)
-  node.handlers = list.New()
   node.children = make(map[string]*routeTreeNode)
   node.dynamicChildren = make(map[string]*routeTreeNode)
 
@@ -77,7 +75,7 @@ func (g *Goober) AddHandler(method string, route string, handler http.Handler) (
     }
   }
   // add handler
-  cur.handlers.PushBack(handler)
+  cur.handler = handler
   return
 }
 
@@ -89,10 +87,12 @@ func (g *Goober) Post(route string, handler http.Handler) {
   g.AddHandler("POST", route, handler)
 }
 
-func walkTree(node map[string]*routeTreeNode, parts *[]string, i int) (handler http.Handler, err int) {
-  handler = nil
-  err = 1
-  return
+func walkTree(node map[string]*routeTreeNode, parts *[]string) (handler http.Handler, err int) {
+  if len(parts) == 0 {
+
+  } else {
+
+  }
 }
 
 func (g *Goober) GetHandlers(method string, path string) {
