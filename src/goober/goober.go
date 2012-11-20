@@ -54,7 +54,6 @@ func (g *Goober) AddHandler(method string, route string, handler http.Handler) (
       return
     }
 
-    // TODO: check if the current piece is a :variable or not
     if strings.HasPrefix(part, ":") {
       // dynamic
       if (cur.dynamicChildren[part] != nil) {
