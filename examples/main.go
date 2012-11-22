@@ -7,14 +7,17 @@ import (
   "fmt"
 )
 
-func foo(w http.ResponseWriter, r *http.Request) {
+func foo(w http.ResponseWriter, r *goober.Request) {
   io.WriteString(w, "Hello, world.")
 }
 
 func main() {
   var x = goober.New()
-  x.Get("/butts", http.HandlerFunc(foo))
-  x.Get("/butts/bugs", http.HandlerFunc(foo))
+  x.Get("/butts", goober.HandlerFunc(foo))
+  x.Get("/butts/bugs", goober.HandlerFunc(foo))
+  x.Get("/butt/:foo", goober.HandlerFunc(foo))
+  x.GetHandler("GET", "/butts/bugs")
+  x.GetHandler("GET", "/butt/bugs")
   fmt.Println("blah")
 }
 
