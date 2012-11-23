@@ -21,6 +21,7 @@ func main() {
   x.Get("/butts", foo)
   x.Get("/butts/bugs", foo)
   x.Get("/butt/:foo", yay)
+  x.ErrorPages[404] = "Not found."
 
   http.Handle("/", x)
   err := http.ListenAndServe(":3000", nil)

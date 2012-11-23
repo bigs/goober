@@ -3,11 +3,12 @@ package goober
 import  (
   "net/http"
   "strings"
-  "fmt"
+  "io"
 )
 
 type Goober struct {
   head map[string]*routeTreeNode
+  ErrorPages map[int]string
 }
 
 type Handler func(http.ResponseWriter, *Request)
@@ -50,7 +51,10 @@ func New() (* Goober) {
   head["PUT"] = newRouteTreeNode()
   head["DELETE"] = newRouteTreeNode()
 
-  g := &Goober{head: head}
+  g := &Goober{
+    head: head,
+    ErrorPages: make(map[int]string),
+  }
 
   return g
 }
@@ -73,31 +77,25 @@ func (g *Goober) AddHandler(method string, route string, handler Handler) (err i
       return
     }
 
-    fmt.Println("for part: \"" + part + "\"")
-
     if strings.HasPrefix(part, ":") {
       // dynamic
       if (cur.variables[part] != nil) {
-        fmt.Println("added to variables")
         cur = cur.variables[part]
       } else {
-        fmt.Println("new variables")
-        var next = newRouteTreeNode()
-        cur.variables[part] = next
-        cur = next
+        cur.variables[part] = newRouteTreeNode()
+        cur = cur.variables[part]
       }
     } else {
+      // static
       if (cur.children[part] != nil) {
-        fmt.Println("added to children")
         cur = cur.children[part]
       } else {
-        fmt.Println("new children")
-        var next = newRouteTreeNode()
-        cur.children[part] = next
-        cur = next
+        cur.children[part] = newRouteTreeNode()
+        cur = cur.children[part]
       }
     }
   }
+
   // add handler
   cur.handler = handler
   return
@@ -122,26 +120,29 @@ func (g *Goober) Delete(route string, handler Handler) (int) {
 func walkTree(node *routeTreeNode, parts []string, r *Request) (handler Handler, err int) {
   err = 0
   handler = nil
+
   if len(parts) == 0 {
-    fmt.Println("arrived at handler")
+    // if we've reached a terminal state, return handler
     handler = node.handler
   } else {
+    // else, look for it
     var part = parts[0]
 
-    fmt.Println("testing: " + part)
     if node.children[part] != nil {
-      fmt.Println("Going static.")
+      // check static routes first
       return walkTree(node.children[part], parts[1:], r)
     } else {
-      fmt.Println(node.variables)
       for k, v := range node.variables {
+        // check all dynamic routes, taking first match
         handler, err = walkTree(v, parts[1:], r)
         if err == 0 {
+          // goofy recursive way to build up params
           r.URLParams[k] = part
-          fmt.Println("YAY: " + k)
           return
         }
       }
+
+      // if we don't find any dynamic matches, there was an error
       err = -1
     }
   }
@@ -152,20 +153,29 @@ func walkTree(node *routeTreeNode, parts []string, r *Request) (handler Handler,
 func (g *Goober) GetHandler(r *Request) (handler Handler, err int) {
   var path = strings.TrimFunc(r.URL.Path, isSlash)
   var parts = strings.Split(path, "/")
-  handler, err = walkTree(g.head[r.Method], parts, r)
-  fmt.Printf("Error: %d\n", err)
-  return
+  return walkTree(g.head[r.Method], parts, r)
+}
+
+func (g *Goober) errorHandler(w http.ResponseWriter, r *Request, code int) {
+  if page, ok := g.ErrorPages[code]; ok {
+    io.WriteString(w, page)
+  }
 }
 
 func (g *Goober) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+  // create request object
   var request = &Request{
     Request: *r,
     URLParams: make(map[string]string),
   }
 
+  // get the handler for the request
   var f, err = g.GetHandler(request)
   if err == 0 && f != nil {
     f(w, request)
+  } else {
+    g.errorHandler(w, request, 404)
   }
+
 }
 
