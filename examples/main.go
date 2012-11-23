@@ -4,30 +4,31 @@ import (
   "goober"
   "net/http"
   "io"
-  "fmt"
   "log"
+  "strings"
 )
 
-func foo(w http.ResponseWriter, r *goober.Request) {
+func helloWorld(w http.ResponseWriter, r *goober.Request) {
   io.WriteString(w, "Hello, world.")
 }
 
-func yay(w http.ResponseWriter, r *goober.Request) {
-  io.WriteString(w, "Hello, " + r.URLParams[":foo"])
+func helloAnyone(w http.ResponseWriter, r *goober.Request) {
+  io.WriteString(w, "Hello, " + r.URLParams[":foo"] + ".<br>\n")
+  for k, v := range r.URL.Query() {
+    io.WriteString(w, k + ": " + strings.Join(v, ", ") + "<br>\n")
+  }
 }
 
 func main() {
-  var x = goober.New()
-  x.Get("/butts", foo)
-  x.Get("/butts/bugs", foo)
-  x.Get("/butt/:foo", yay)
-  x.ErrorPages[404] = "Not found."
+  var g = goober.New()
+  g.Get("/hello", helloWorld)
+  g.Get("/hello/:foo", helloAnyone)
+  g.ErrorPages[404] = "<h1>Not found.</h1>"
 
-  http.Handle("/", x)
+  http.Handle("/", g)
   err := http.ListenAndServe(":3000", nil)
   if err != nil {
     log.Fatal("ListenAndServe: ", err)
   }
-  fmt.Println("blah")
 }
 

@@ -4,6 +4,8 @@ import  (
   "net/http"
   "strings"
   "io"
+  "time"
+  "fmt"
 )
 
 type Goober struct {
@@ -158,11 +160,17 @@ func (g *Goober) GetHandler(r *Request) (handler Handler, err int) {
 
 func (g *Goober) errorHandler(w http.ResponseWriter, r *Request, code int) {
   if page, ok := g.ErrorPages[code]; ok {
+    w.Header().Set("Content-Type", "text/html; charset=utf-8")
+    w.WriteHeader(code)
     io.WriteString(w, page)
   }
 }
 
 func (g *Goober) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+  var startTime = time.Now()
+  defer func() {
+    fmt.Printf("[%s] %s - took %s\n", r.Method, r.URL.Path, time.Since(startTime))
+  }()
   // create request object
   var request = &Request{
     Request: *r,
@@ -172,6 +180,8 @@ func (g *Goober) ServeHTTP(w http.ResponseWriter, r *http.Request) {
   // get the handler for the request
   var f, err = g.GetHandler(request)
   if err == 0 && f != nil {
+    // user response
+    w.Header().Set("Content-Type", "text/html; charset=utf-8")
     f(w, request)
   } else {
     g.errorHandler(w, request, 404)
