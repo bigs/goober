@@ -8,28 +8,37 @@ import  (
   "fmt"
 )
 
+// Main goober struct. Abides the handler interface.
 type Goober struct {
   head map[string]*routeTreeNode
   ErrorPages map[int]string
 }
 
+// Goober handlers, for simplicity, are just functions with a given
+// signature.
 type Handler func(http.ResponseWriter, *Request)
 
+// We use this a few places, so we can give it a type as well.
 type RouteMap map[string]*routeTreeNode
 
+// Our parse tree structure for routes
 type routeTreeNode struct {
+  // Handler if a node is a terminal
   handler Handler
+  // Statis children
   children RouteMap
+  // Dynamic/variable children
   variables RouteMap
 }
 
-// Special request structure
-
+// Augment http.Request with URLParams that will be grabbed
+// from the request in the form of /:variables/
 type Request struct {
   http.Request
   URLParams map[string]string
 }
 
+// A quick initializer for routeTreeNodes
 func newRouteTreeNode() (node *routeTreeNode) {
   node = &routeTreeNode{
     children: make(RouteMap),
@@ -39,16 +48,12 @@ func newRouteTreeNode() (node *routeTreeNode) {
   return
 }
 
-// TODO: create my own interface.
-//
-// the program should register a default handler but all user-added
-// handlers should be of our own interface using goober.Request, allowing
-// for a sexier route params hash
-
+// Initialize our Goober object
 func New() (* Goober) {
   var head = make(RouteMap)
   head = head
   head["GET"] = newRouteTreeNode()
+  head["HEAD"] = newRouteTreeNode()
   head["POST"] = newRouteTreeNode()
   head["PUT"] = newRouteTreeNode()
   head["DELETE"] = newRouteTreeNode()
@@ -61,24 +66,29 @@ func New() (* Goober) {
   return g
 }
 
+// Simple helper to allow us to trim leading and trailing /'s
 func isSlash(s rune) (bool) {
   return s == '/'
 }
 
+// Adds a handler to our route tree
 func (g *Goober) AddHandler(method string, route string, handler Handler) (err int){
   err = 0
   route = strings.TrimFunc(route, isSlash)
   var parts = strings.Split(route, "/")
 
+  // Iterate through the bits of our path and add to the tree
   var cur = g.head[method]
   for i := range parts {
     var part = parts[i]
 
+    // No // empty paths
     if (len(part) == 0) {
       err = 1
       return
     }
 
+    // Check for variables
     if strings.HasPrefix(part, ":") {
       // dynamic
       if (cur.variables[part] != nil) {
@@ -103,8 +113,10 @@ func (g *Goober) AddHandler(method string, route string, handler Handler) (err i
   return
 }
 
+// Wrapper functions for common types of request
 func (g *Goober) Get(route string, handler Handler) (int) {
   return g.AddHandler("GET", route, handler)
+  return g.AddHandler("HEAD", route, handler)
 }
 
 func (g *Goober) Post(route string, handler Handler) (int) {
@@ -131,7 +143,7 @@ func walkTree(node *routeTreeNode, parts []string, r *Request) (handler Handler,
     var part = parts[0]
 
     if node.children[part] != nil {
-      // check static routes first
+      // check static routes first, they have priority
       return walkTree(node.children[part], parts[1:], r)
     } else {
       for k, v := range node.variables {
@@ -152,12 +164,14 @@ func walkTree(node *routeTreeNode, parts []string, r *Request) (handler Handler,
   return
 }
 
+// Given a request, find the appropriate handler
 func (g *Goober) GetHandler(r *Request) (handler Handler, err int) {
   var path = strings.TrimFunc(r.URL.Path, isSlash)
   var parts = strings.Split(path, "/")
   return walkTree(g.head[r.Method], parts, r)
 }
 
+// A simple function to handle error pages for us
 func (g *Goober) errorHandler(w http.ResponseWriter, r *Request, code int) {
   if page, ok := g.ErrorPages[code]; ok {
     w.Header().Set("Content-Type", "text/html; charset=utf-8")
@@ -166,12 +180,14 @@ func (g *Goober) errorHandler(w http.ResponseWriter, r *Request, code int) {
   }
 }
 
+// Routes requests
 func (g *Goober) ServeHTTP(w http.ResponseWriter, r *http.Request) {
   var startTime = time.Now()
   defer func() {
     fmt.Printf("[%s] %s - took %s\n", r.Method, r.URL.Path, time.Since(startTime))
   }()
-  // create request object
+
+  // create augmented request object
   var request = &Request{
     Request: *r,
     URLParams: make(map[string]string),
@@ -180,7 +196,7 @@ func (g *Goober) ServeHTTP(w http.ResponseWriter, r *http.Request) {
   // get the handler for the request
   var f, err = g.GetHandler(request)
   if err == 0 && f != nil {
-    // user response
+    // user response. pad with content-type.
     w.Header().Set("Content-Type", "text/html; charset=utf-8")
     f(w, request)
   } else {
