@@ -10,10 +10,14 @@ type Goober struct {
   head map[string]*routeTreeNode
 }
 
+type Handler func(http.ResponseWriter, *Request)
+
+type RouteMap map[string]*routeTreeNode
+
 type routeTreeNode struct {
   handler Handler
-  children map[string]*routeTreeNode
-  dynamicChildren map[string]*routeTreeNode
+  children RouteMap
+  variables RouteMap
 }
 
 // Special request structure
@@ -23,22 +27,11 @@ type Request struct {
   URLParams map[string]string
 }
 
-type Handler interface {
-  ServeHTTP(http.ResponseWriter, *Request)
-}
-
-type HandlerFunc func(http.ResponseWriter, *Request)
-
-func (f HandlerFunc) ServeHTTP(w http.ResponseWriter, r *Request) {
-  f(w, r)
-}
-
-type RouteMap map[string]*routeTreeNode
-
 func newRouteTreeNode() (node *routeTreeNode) {
-  node = new(routeTreeNode)
-  node.children = make(RouteMap)
-  node.dynamicChildren = make(RouteMap)
+  node = &routeTreeNode{
+    children: make(RouteMap),
+    variables: make(RouteMap),
+  }
 
   return
 }
@@ -80,19 +73,25 @@ func (g *Goober) AddHandler(method string, route string, handler Handler) (err i
       return
     }
 
+    fmt.Println("for part: \"" + part + "\"")
+
     if strings.HasPrefix(part, ":") {
       // dynamic
-      if (cur.dynamicChildren[part] != nil) {
-        cur = cur.dynamicChildren[part]
+      if (cur.variables[part] != nil) {
+        fmt.Println("added to variables")
+        cur = cur.variables[part]
       } else {
+        fmt.Println("new variables")
         var next = newRouteTreeNode()
-        cur.dynamicChildren[part] = next
+        cur.variables[part] = next
         cur = next
       }
     } else {
       if (cur.children[part] != nil) {
+        fmt.Println("added to children")
         cur = cur.children[part]
       } else {
+        fmt.Println("new children")
         var next = newRouteTreeNode()
         cur.children[part] = next
         cur = next
@@ -104,51 +103,69 @@ func (g *Goober) AddHandler(method string, route string, handler Handler) (err i
   return
 }
 
-func (g *Goober) Get(route string, handler Handler) {
-  g.AddHandler("GET", route, handler)
+func (g *Goober) Get(route string, handler Handler) (int) {
+  return g.AddHandler("GET", route, handler)
 }
 
-func (g *Goober) Post(route string, handler Handler) {
-  g.AddHandler("POST", route, handler)
+func (g *Goober) Post(route string, handler Handler) (int) {
+  return g.AddHandler("POST", route, handler)
 }
 
-func (g *Goober) Put(route string, handler Handler) {
-  g.AddHandler("PUT", route, handler)
+func (g *Goober) Put(route string, handler Handler) (int) {
+  return g.AddHandler("PUT", route, handler)
 }
 
-func (g *Goober) Delete(route string, handler Handler) {
-  g.AddHandler("DELETE", route, handler)
+func (g *Goober) Delete(route string, handler Handler) (int) {
+  return g.AddHandler("DELETE", route, handler)
 }
 
-func walkTree(node *routeTreeNode, parts []string) (handler Handler, err int) {
+func walkTree(node *routeTreeNode, parts []string, r *Request) (handler Handler, err int) {
   err = 0
   handler = nil
   if len(parts) == 0 {
+    fmt.Println("arrived at handler")
     handler = node.handler
   } else {
     var part = parts[0]
 
-    fmt.Println(part)
+    fmt.Println("testing: " + part)
     if node.children[part] != nil {
-      return walkTree(node.children[part], parts[1:])
+      fmt.Println("Going static.")
+      return walkTree(node.children[part], parts[1:], r)
     } else {
-      for _, v := range node.dynamicChildren {
-        handler, err = walkTree(v, parts[1:])
+      fmt.Println(node.variables)
+      for k, v := range node.variables {
+        handler, err = walkTree(v, parts[1:], r)
         if err == 0 {
+          r.URLParams[k] = part
+          fmt.Println("YAY: " + k)
           return
         }
       }
+      err = -1
     }
   }
 
   return
 }
 
-func (g *Goober) GetHandler(method string, path string) (handler Handler, err int) {
-  path = strings.TrimFunc(path, isSlash)
+func (g *Goober) GetHandler(r *Request) (handler Handler, err int) {
+  var path = strings.TrimFunc(r.URL.Path, isSlash)
   var parts = strings.Split(path, "/")
-  handler, err = walkTree(g.head[method], parts)
+  handler, err = walkTree(g.head[r.Method], parts, r)
   fmt.Printf("Error: %d\n", err)
   return
+}
+
+func (g *Goober) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+  var request = &Request{
+    Request: *r,
+    URLParams: make(map[string]string),
+  }
+
+  var f, err = g.GetHandler(request)
+  if err == 0 && f != nil {
+    f(w, request)
+  }
 }
 
