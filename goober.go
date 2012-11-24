@@ -70,9 +70,18 @@ func isSlash(s rune) (bool) {
   return s == '/'
 }
 
+type BadRouteError struct {
+  Route string
+  Reason string
+}
+
+func (e BadRouteError) Error() string {
+  return "\"" + e.Route + "\" is an invalid route because " + e.Reason + "."
+}
+
 // Adds a handler to our route tree
-func (g *Goober) AddHandler(method string, route string, handler Handler) (err int){
-  err = 0
+func (g *Goober) AddHandler(method string, route string, handler Handler) (err error){
+  err = nil
   route = strings.TrimFunc(route, isSlash)
   var parts = strings.Split(route, "/")
 
@@ -83,7 +92,11 @@ func (g *Goober) AddHandler(method string, route string, handler Handler) (err i
 
     // No // empty paths
     if (len(part) == 0) {
-      return 1
+      err := BadRouteError{
+        Route: route,
+        Reason: "it had an empty segment",
+      }
+      return err
     }
 
     // Check for variables
@@ -112,30 +125,41 @@ func (g *Goober) AddHandler(method string, route string, handler Handler) (err i
 }
 
 // Wrapper functions for common types of request
-func (g *Goober) Get(route string, handler Handler) (int) {
+func (g *Goober) Get(route string, handler Handler) (error) {
   return g.AddHandler("GET", route, handler)
   return g.AddHandler("HEAD", route, handler)
 }
 
-func (g *Goober) Post(route string, handler Handler) (int) {
+func (g *Goober) Post(route string, handler Handler) (error) {
   return g.AddHandler("POST", route, handler)
 }
 
-func (g *Goober) Put(route string, handler Handler) (int) {
+func (g *Goober) Put(route string, handler Handler) (error) {
   return g.AddHandler("PUT", route, handler)
 }
 
-func (g *Goober) Delete(route string, handler Handler) (int) {
+func (g *Goober) Delete(route string, handler Handler) (error) {
   return g.AddHandler("DELETE", route, handler)
 }
 
-func walkTree(node *routeTreeNode, parts []string, r *Request) (handler Handler, err int) {
-  err = 0
+type RouteNotFoundError struct {
+  Route string
+}
+
+func (e RouteNotFoundError) Error() string {
+  return "Route \"" + e.Route + "\" was not found."
+}
+
+func walkTree(node *routeTreeNode, parts []string, r *Request) (handler Handler, err error) {
+  err = nil
   handler = nil
 
   if len(parts) == 0 {
     // if we've reached a terminal state, return handler
     handler = node.handler
+    if handler == nil {
+      err = &RouteNotFoundError{Route: r.URL.Path}
+    }
   } else {
     // else, look for it
     var part = parts[0]
@@ -150,7 +174,7 @@ func walkTree(node *routeTreeNode, parts []string, r *Request) (handler Handler,
       for k, v := range node.variables {
         // check all dynamic routes, taking first match
         handler, err = walkTree(v, parts[1:], r)
-        if err == 0 {
+        if err == nil {
           // goofy recursive way to build up params
           r.URLParams[k] = part
           return
@@ -158,7 +182,7 @@ func walkTree(node *routeTreeNode, parts []string, r *Request) (handler Handler,
       }
 
       // if we don't find any dynamic matches, there was an error
-      err = -1
+      err = &RouteNotFoundError{Route: r.URL.Path}
     }
   }
 
@@ -166,7 +190,7 @@ func walkTree(node *routeTreeNode, parts []string, r *Request) (handler Handler,
 }
 
 // Given a request, find the appropriate handler
-func (g *Goober) GetHandler(r *Request) (handler Handler, err int) {
+func (g *Goober) GetHandler(r *Request) (handler Handler, err error) {
   var path = strings.TrimFunc(r.URL.Path, isSlash)
   var parts = strings.Split(path, "/")
   return walkTree(g.head[r.Method], parts, r)
@@ -196,11 +220,12 @@ func (g *Goober) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
   // get the handler for the request
   var f, err = g.GetHandler(request)
-  if err == 0 && f != nil {
+  if err == nil {
     // user response. pad with content-type.
     w.Header().Set("Content-Type", "text/html; charset=utf-8")
     f(w, request)
   } else {
+    fmt.Println("[ERROR] " + err.Error())
     g.errorHandler(w, request, 404)
   }
 
