@@ -1,7 +1,7 @@
 package main
 
 import (
-  "github.com/bigs/goober"
+  "../../goober"
   "net/http"
   "io"
   "log"
@@ -19,10 +19,16 @@ func helloAnyone(w http.ResponseWriter, r *goober.Request) {
   }
 }
 
+func static(w http.ResponseWriter, r *goober.Request) {
+  var fileName = "./" + r.URLParams["*"]
+  http.ServeFile(w, &r.Request, fileName)
+}
+
 func main() {
   var g = goober.New()
   g.Get("/hello", helloWorld)
   g.Get("/hello/:foo", helloAnyone)
+  g.Get("/assets/*", static)
   g.ErrorPages[404] = "<h1>Not found.</h1>"
 
   http.Handle("/", g)
