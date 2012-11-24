@@ -83,8 +83,7 @@ func (g *Goober) AddHandler(method string, route string, handler Handler) (err i
 
     // No // empty paths
     if (len(part) == 0) {
-      err = 1
-      return
+      return 1
     }
 
     // Check for variables
