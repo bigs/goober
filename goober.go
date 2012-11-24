@@ -51,7 +51,6 @@ func newRouteTreeNode() (node *routeTreeNode) {
 // Initialize our Goober object
 func New() (* Goober) {
   var head = make(RouteMap)
-  head = head
   head["GET"] = newRouteTreeNode()
   head["HEAD"] = newRouteTreeNode()
   head["POST"] = newRouteTreeNode()
