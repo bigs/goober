@@ -32,8 +32,7 @@ An example can be found in examples/main.go, but here is an excerpt of all that 
 	  g.Get("/hello/:name", hello)
 	  g.ErrorPages[404] = "<h1>Not found.</h1>"
 
-	  http.Handle("/", g)
-	  err := http.ListenAndServe(":3000", nil)
+	  err := g.http.ListenAndServe(":3000")
 	  if err != nil {
 	    log.Fatal("ListenAndServe: ", err)
 	  }

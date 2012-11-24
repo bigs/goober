@@ -31,8 +31,8 @@ func main() {
   g.Get("/assets/*", static)
   g.ErrorPages[404] = "<h1>Not found.</h1>"
 
-  http.Handle("/", g)
-  err := http.ListenAndServe(":3000", nil)
+  err := g.ListenAndServe(":3000")
+
   if err != nil {
     log.Fatal("ListenAndServe: ", err)
   }

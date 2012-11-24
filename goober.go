@@ -208,3 +208,9 @@ func (g *Goober) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 }
 
+// shortcut to start serving a goober service
+func (g *Goober) ListenAndServe(addr string) (err error)  {
+  http.Handle("/", g)
+  return http.ListenAndServe(addr, nil)
+}
+
