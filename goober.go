@@ -142,7 +142,10 @@ func walkTree(node *routeTreeNode, parts []string, r *Request) (handler Handler,
     // else, look for it
     var part = parts[0]
 
-    if node.children[part] != nil {
+    if child, ok := node.children["*"]; ok {
+      handler = child.handler
+      r.URLParams["*"] = strings.Join(parts, "/")
+    } else if node.children[part] != nil {
       // check static routes first, they have priority
       return walkTree(node.children[part], parts[1:], r)
     } else {
