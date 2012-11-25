@@ -23,12 +23,9 @@ type RouteMap map[string]*routeTreeNode
 
 // Our parse tree structure for routes
 type routeTreeNode struct {
-  // Handler if a node is a terminal
-  handler Handler
-  // Statis children
-  children RouteMap
-  // Dynamic/variable children
-  variables RouteMap
+  handler Handler // Handler if a node is a terminal
+  children RouteMap // Static children
+  variables RouteMap // Dynamic/variable children
 }
 
 // Augment http.Request with URLParams that will be grabbed
