@@ -202,6 +202,15 @@ func (g *Goober) errorHandler(w http.ResponseWriter, r *Request, code int) {
   }
 }
 
+// Borrowed from web.go
+func webTime(t time.Time) string {
+  ftime := t.Format(time.RFC1123)
+  if strings.HasSuffix(ftime, "UTC") {
+    ftime = ftime[0:len(ftime)-3] + "GMT"
+  }
+  return ftime
+}
+
 // Routes requests
 func (g *Goober) ServeHTTP(w http.ResponseWriter, r *http.Request) {
   var startTime = time.Now()
@@ -221,6 +230,8 @@ func (g *Goober) ServeHTTP(w http.ResponseWriter, r *http.Request) {
   if err == nil {
     // user response. pad with content-type.
     w.Header().Set("Content-Type", "text/html; charset=utf-8")
+    w.Header().Set("Server", "goober.go")
+    w.Header().Set("Date", webTime(time.Now().UTC()))
     f(w, request)
   } else {
     fmt.Println("[ERROR] " + err.Error())
