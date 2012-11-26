@@ -207,6 +207,7 @@ func (g *Goober) ServeHTTP(w http.ResponseWriter, r *http.Request) {
   var startTime = time.Now()
   defer func() {
     fmt.Printf("[%s] %s - took %s\n", r.Method, r.URL.Path, time.Since(startTime))
+    r.Body.Close()
   }()
 
   // create augmented request object
