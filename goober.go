@@ -17,6 +17,7 @@ type Goober struct {
 // Goober handlers, for simplicity, are just functions with a given
 // signature.
 type Handler func(http.ResponseWriter, *Request)
+type PreHandler func(http.ResponseWriter, *Request) (error)
 
 // We use this a few places, so we can give it a type as well.
 type RouteMap map[string]*routeTreeNode
@@ -24,8 +25,22 @@ type RouteMap map[string]*routeTreeNode
 // Our parse tree structure for routes
 type routeTreeNode struct {
   handler Handler // Handler if a node is a terminal
+  pre []PreHandler
+  post []Handler
   children RouteMap // Static children
   variables RouteMap // Dynamic/variable children
+}
+
+// Chaining for pre/post handlers
+
+func (n *routeTreeNode) AddPreFunc(f PreHandler) (*routeTreeNode) {
+  n.pre = append(n.pre[:], f)
+  return n
+}
+
+func (n *routeTreeNode) AddPostFunc(f Handler) (*routeTreeNode) {
+  n.post = append(n.post[:], f)
+  return n
 }
 
 // Augment http.Request with URLParams that will be grabbed
@@ -77,23 +92,18 @@ func (e BadRouteError) Error() string {
 }
 
 // Adds a handler to our route tree
-func (g *Goober) AddHandler(method string, route string, handler Handler) (err error){
-  err = nil
+func (g *Goober) AddHandler(method string, route string, handler Handler) (cur *routeTreeNode){
   route = strings.TrimFunc(route, isSlash)
   var parts = strings.Split(route, "/")
 
   // Iterate through the bits of our path and add to the tree
-  var cur = g.head[method]
+  cur = g.head[method]
   for i := range parts {
     var part = parts[i]
 
     // No // empty paths
     if (len(part) == 0) {
-      err := BadRouteError{
-        Route: route,
-        Reason: "it had an empty segment",
-      }
-      return err
+      return nil
     }
 
     // Check for variables
@@ -122,20 +132,23 @@ func (g *Goober) AddHandler(method string, route string, handler Handler) (err e
 }
 
 // Wrapper functions for common types of request
-func (g *Goober) Get(route string, handler Handler) (error) {
+func (g *Goober) Get(route string, handler Handler) (node *routeTreeNode) {
   return g.AddHandler("GET", route, handler)
+}
+
+func (g *Goober) Head(route string, handler Handler) (node *routeTreeNode) {
   return g.AddHandler("HEAD", route, handler)
 }
 
-func (g *Goober) Post(route string, handler Handler) (error) {
+func (g *Goober) Post(route string, handler Handler) (node *routeTreeNode) {
   return g.AddHandler("POST", route, handler)
 }
 
-func (g *Goober) Put(route string, handler Handler) (error) {
+func (g *Goober) Put(route string, handler Handler) (node *routeTreeNode) {
   return g.AddHandler("PUT", route, handler)
 }
 
-func (g *Goober) Delete(route string, handler Handler) (error) {
+func (g *Goober) Delete(route string, handler Handler) (node *routeTreeNode) {
   return g.AddHandler("DELETE", route, handler)
 }
 
@@ -147,22 +160,20 @@ func (e RouteNotFoundError) Error() string {
   return "Route \"" + e.Route + "\" was not found."
 }
 
-func walkTree(node *routeTreeNode, parts []string, r *Request) (handler Handler, err error) {
-  err = nil
-  handler = nil
-
+func walkTree(node *routeTreeNode, parts []string, r *Request) (*routeTreeNode, error) {
+  var err error = nil
   if len(parts) == 0 {
-    // if we've reached a terminal state, return handler
-    handler = node.handler
-    if handler == nil {
+    // if we've reached a terminal state, return node
+    if node.handler == nil {
       err = &RouteNotFoundError{Route: r.URL.Path}
     }
+    return node, err
   } else {
     // else, look for it
     var part = parts[0]
 
     if child, ok := node.children["*"]; ok {
-      handler = child.handler
+      node = child
       r.URLParams["*"] = strings.Join(parts, "/")
     } else if node.children[part] != nil {
       // check static routes first, they have priority
@@ -170,11 +181,11 @@ func walkTree(node *routeTreeNode, parts []string, r *Request) (handler Handler,
     } else {
       for k, v := range node.variables {
         // check all dynamic routes, taking first match
-        handler, err = walkTree(v, parts[1:], r)
+        node, err = walkTree(v, parts[1:], r)
         if err == nil {
           // goofy recursive way to build up params
           r.URLParams[k] = part
-          return
+          return node, err
         }
       }
 
@@ -183,13 +194,13 @@ func walkTree(node *routeTreeNode, parts []string, r *Request) (handler Handler,
     }
   }
 
-  return
+  return node, err
 }
 
 // Given a request, find the appropriate handler
-func (g *Goober) GetHandler(r *Request) (handler Handler, err error) {
-  var path = strings.TrimFunc(r.URL.Path, isSlash)
-  var parts = strings.Split(path, "/")
+func (g *Goober) GetHandler(r *Request) (node *routeTreeNode, err error) {
+  path := strings.TrimFunc(r.URL.Path, isSlash)
+  parts := strings.Split(path, "/")
   return walkTree(g.head[r.Method], parts, r)
 }
 
@@ -226,13 +237,25 @@ func (g *Goober) ServeHTTP(w http.ResponseWriter, r *http.Request) {
   }
 
   // get the handler for the request
-  var f, err = g.GetHandler(request)
+  node, err := g.GetHandler(request)
   if err == nil {
     // user response. pad with content-type.
     w.Header().Set("Content-Type", "text/html; charset=utf-8")
     w.Header().Set("Server", "goober.go")
     w.Header().Set("Date", webTime(time.Now().UTC()))
-    f(w, request)
+
+    // Run prefunctions
+    for _, f := range node.pre {
+      if e := f(w, request); e != nil {
+        // if there is an error, 404 and exit out
+        fmt.Println("[ERROR] " + e.Error())
+        g.errorHandler(w, request, 404)
+        return
+      }
+    }
+
+    // Run the handler
+    node.handler(w, request)
   } else {
     fmt.Println("[ERROR] " + err.Error())
     g.errorHandler(w, request, 404)
