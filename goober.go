@@ -256,6 +256,11 @@ func (g *Goober) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
     // Run the handler
     node.handler(w, request)
+
+    // Run all postfunctions
+    for _, f := range node.post {
+      f(w, request)
+    }
   } else {
     fmt.Println("[ERROR] " + err.Error())
     g.errorHandler(w, request, 404)

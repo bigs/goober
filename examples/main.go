@@ -32,6 +32,10 @@ func helloPreFunc (w http.ResponseWriter, r *goober.Request) (error) {
   return err
 }
 
+func helloPostFunc (w http.ResponseWriter, r *goober.Request) {
+  log.Println("Successfully served hello :name request.")
+}
+
 type SomeError struct {}
 func (e *SomeError) Error() string {
   return "There was an error."
@@ -40,7 +44,9 @@ func (e *SomeError) Error() string {
 func main() {
   var g = goober.New()
   g.Get("/hello", helloWorld)
-  g.Get("/hello/:name", helloAnyone).AddPreFunc(helloPreFunc)
+  g.Get("/hello/:name", helloAnyone).
+    AddPreFunc(helloPreFunc).
+    AddPostFunc(helloPostFunc)
   g.Get("/assets/*", static)
   g.ErrorPages[404] = "<h1>Not found.</h1>"
 
