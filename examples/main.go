@@ -32,8 +32,9 @@ func helloPreFunc (w http.ResponseWriter, r *goober.Request) (error) {
   return err
 }
 
-func helloPostFunc (w http.ResponseWriter, r *goober.Request) {
+func helloPostFunc (w http.ResponseWriter, r *goober.Request) (error) {
   log.Println("Successfully served hello :name request.")
+  return nil
 }
 
 type SomeError struct {}

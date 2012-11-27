@@ -17,7 +17,7 @@ type Goober struct {
 // Goober handlers, for simplicity, are just functions with a given
 // signature.
 type Handler func(http.ResponseWriter, *Request)
-type PreHandler func(http.ResponseWriter, *Request) (error)
+type PipeHandler func(http.ResponseWriter, *Request) (error)
 
 // We use this a few places, so we can give it a type as well.
 type RouteMap map[string]*routeTreeNode
@@ -25,20 +25,20 @@ type RouteMap map[string]*routeTreeNode
 // Our parse tree structure for routes
 type routeTreeNode struct {
   handler Handler // Handler if a node is a terminal
-  pre []PreHandler
-  post []Handler
+  pre []PipeHandler
+  post []PipeHandler
   children RouteMap // Static children
   variables RouteMap // Dynamic/variable children
 }
 
 // Chaining for pre/post handlers
 
-func (n *routeTreeNode) AddPreFunc(f PreHandler) (*routeTreeNode) {
+func (n *routeTreeNode) AddPreFunc(f PipeHandler) (*routeTreeNode) {
   n.pre = append(n.pre[:], f)
   return n
 }
 
-func (n *routeTreeNode) AddPostFunc(f Handler) (*routeTreeNode) {
+func (n *routeTreeNode) AddPostFunc(f PipeHandler) (*routeTreeNode) {
   n.post = append(n.post[:], f)
   return n
 }
@@ -247,7 +247,7 @@ func (g *Goober) ServeHTTP(w http.ResponseWriter, r *http.Request) {
     // Run prefunctions
     for _, f := range node.pre {
       if e := f(w, request); e != nil {
-        // if there is an error, 404 and exit out
+        // if there is an error, print, 404 and exit out
         fmt.Println("[ERROR] " + e.Error())
         g.errorHandler(w, request, 404)
         return
@@ -259,7 +259,11 @@ func (g *Goober) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
     // Run all postfunctions
     for _, f := range node.post {
-      f(w, request)
+      if e := f(w, request); e != nil {
+        // if there is an error, print and exit out
+        fmt.Println("[ERROR] " + e.Error())
+        return
+      }
     }
   } else {
     fmt.Println("[ERROR] " + err.Error())
