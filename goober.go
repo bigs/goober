@@ -1,5 +1,11 @@
 package goober
 
+/*
+ * Funky fresh library brought to you by:
+ *   Cole Brown
+ *
+ */
+
 import  (
   "net/http"
   "strings"
