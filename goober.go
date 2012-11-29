@@ -98,30 +98,34 @@ func (g *Goober) AddHandler(method string, route string, handler Handler) (cur *
 
   // Iterate through the bits of our path and add to the tree
   cur = g.head[method]
-  for i := range parts {
-    var part = parts[i]
 
-    // No // empty paths
-    if (len(part) == 0) {
-      return nil
-    }
+  // check to see if it's the root
+  if len(route) > 0 {
+    for i := range parts {
+      var part = parts[i]
 
-    // Check for variables
-    if strings.HasPrefix(part, ":") {
-      // dynamic
-      if (cur.variables[part] != nil) {
-        cur = cur.variables[part]
-      } else {
-        cur.variables[part] = newRouteTreeNode()
-        cur = cur.variables[part]
+      // No // empty paths
+      if len(part) == 0 {
+        return nil
       }
-    } else {
-      // static
-      if (cur.children[part] != nil) {
-        cur = cur.children[part]
+
+      // Check for variables
+      if strings.HasPrefix(part, ":") {
+        // dynamic
+        if (cur.variables[part] != nil) {
+          cur = cur.variables[part]
+        } else {
+          cur.variables[part] = newRouteTreeNode()
+          cur = cur.variables[part]
+        }
       } else {
-        cur.children[part] = newRouteTreeNode()
-        cur = cur.children[part]
+        // static
+        if (cur.children[part] != nil) {
+          cur = cur.children[part]
+        } else {
+          cur.children[part] = newRouteTreeNode()
+          cur = cur.children[part]
+        }
       }
     }
   }
@@ -200,6 +204,12 @@ func walkTree(node *routeTreeNode, parts []string, r *Request) (*routeTreeNode, 
 // Given a request, find the appropriate handler
 func (g *Goober) GetHandler(r *Request) (node *routeTreeNode, err error) {
   path := strings.TrimFunc(r.URL.Path, isSlash)
+
+  // root case
+  if len(path) == 0 {
+    return g.head[r.Method], nil
+  }
+
   parts := strings.Split(path, "/")
   return walkTree(g.head[r.Method], parts, r)
 }
