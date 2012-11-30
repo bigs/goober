@@ -12,6 +12,7 @@ import  (
   "io"
   "time"
   "fmt"
+  "net/url"
 )
 
 // Main goober struct. Abides the handler interface.
@@ -298,7 +299,17 @@ func (g *Goober) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 // Turns a http.HandlerFunc into a goober.Handler
 func MakeHandler(f http.Handler) (Handler) {
   return func (w http.ResponseWriter, r *Request) {
-    f.ServeHTTP(w, &r.Request)
+    values := make(url.Values)
+    req := &r.Request
+    for k, v := range r.URLParams {
+      values.Set(k, v)
+    }
+    if len(req.URL.RawQuery) > 0 {
+      req.URL.RawQuery = values.Encode() + "&" + req.URL.RawQuery
+    } else {
+      req.URL.RawQuery = values.Encode()
+    }
+    f.ServeHTTP(w, req)
   }
 }
 
