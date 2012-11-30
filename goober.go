@@ -61,6 +61,8 @@ func newRouteTreeNode() (node *routeTreeNode) {
   node = &routeTreeNode{
     children: make(RouteMap),
     variables: make(RouteMap),
+    pre: []PipeHandler{},
+    post: []PipeHandler{},
   }
 
   return
@@ -213,7 +215,12 @@ func (g *Goober) GetHandler(r *Request) (node *routeTreeNode, err error) {
 
   // root case
   if len(path) == 0 {
-    return g.head[r.Method], nil
+    if g.head[r.Method].handler == nil {
+      err := &RouteNotFoundError{Route: r.URL.Path}
+      return g.head[r.Method], err
+    } else {
+      return g.head[r.Method], nil
+    }
   }
 
   parts := strings.Split(path, "/")
