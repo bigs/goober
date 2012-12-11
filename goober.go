@@ -264,7 +264,7 @@ func (g *Goober) ServeHTTP(w http.ResponseWriter, r *http.Request) {
   node, err := g.GetHandler(request)
   if err == nil {
     // user response. pad with content-type.
-    w.Header().Set("Content-Type", "text/html; charset=utf-8")
+    //w.Header().Set("Content-Type", "text/html; charset=utf-8")
     w.Header().Set("Server", "goober.go")
     w.Header().Set("Date", webTime(time.Now().UTC()))
 
